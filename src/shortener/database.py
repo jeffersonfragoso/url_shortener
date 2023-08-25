@@ -6,7 +6,7 @@ from .config import get_settings
 
 engine = create_engine(
   url=get_settings().db_url,
-  connect_args={"check_same_thread": False},
+  echo=True,
 )
 
 SessionLocal = sessionmaker(
