@@ -1,6 +1,7 @@
 from sqlmodel import Session
 from sqlmodel import select
-from . import keygen, models, schemas
+from shortener import keygen, schemas
+from shortener.mongodb import models
 
 
 async def create_db_url(session: Session, url: schemas.URLBase) -> models.URL:
