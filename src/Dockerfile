@@ -26,3 +26,4 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 FROM dependencies_stage
 
 COPY . .
+ENTRYPOINT ["./prestart.sh"]
