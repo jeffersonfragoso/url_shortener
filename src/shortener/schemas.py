@@ -1,6 +1,5 @@
 from pydantic import BaseModel, AnyHttpUrl
 
-
 class URLBase(BaseModel):
   target_url: AnyHttpUrl
 

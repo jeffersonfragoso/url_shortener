@@ -1,32 +1,33 @@
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from starlette.datastructures import URL
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 
 from .config import get_settings
 from . import crud, models, schemas
-from .database import SessionLocal, engine
+from .database import get_session, init_db
 
 
 app = FastAPI()
-models.Base.metadata.create_all(bind=engine)
 
-def get_db():
-  db = SessionLocal()
-  try:
-    yield db
-  finally:
-    db.close()
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
 
 
-def get_admin_info(db_url: models.URL) -> schemas.URLInfo:
+async def get_admin_info(db_url: models.URL) -> schemas.URLInfo:
   base_url = URL(get_settings().base_url)
   admin_endpoint = app.url_path_for(
     "administration info", secret_key=db_url.secret_key
   )
-  db_url.url = str(base_url.replace(path=db_url.key))
-  db_url.admin_url = str(base_url.replace(path=admin_endpoint))
-  return db_url
+  admin_info = schemas.URLInfo(
+    target_url=db_url.target_url,
+    url=str(base_url.replace(path=db_url.key)),
+    admin_url=str(base_url.replace(path=admin_endpoint)),
+    clicks=db_url.clicks,
+    is_active=db_url.is_active,
+  )
+  return admin_info
 
 
 
@@ -40,20 +41,21 @@ def raise_not_found(request):
   raise HTTPException(status_code=404, detail=message)
 
 
-
 @app.post("/url", response_model=schemas.URLInfo)
-def create_url(url: schemas.URLBase, db: Session = Depends(get_db)):
-  db_url = crud.create_db_url(db=db, url=url)
-  return get_admin_info(db_url)
+async def create_url(url: schemas.URLBase, session: Session = Depends(get_session)):
+  db_url = await crud.create_db_url(session=session, url=url)
+  result = await get_admin_info(db_url)
+  return result
 
 @app.get("/{url_key}")
-def forwad_to_target_url(
+async def forwad_to_target_url(
   url_key: str,
   request: Request,
-  db: Session = Depends(get_db)
+  session: Session = Depends(get_session)
 ):
-  if db_url := crud.get_db_url_by_key(db=db, url_key=url_key):
-    crud.update_db_clicks(db=db, db_url=db_url)
+  db_url = await crud.get_db_url_by_key(session=session, url_key=url_key)
+  if db_url:
+    await crud.update_db_clicks(session=session, db_url=db_url)
     return RedirectResponse(db_url.target_url)
   else:
     raise_not_found(request)
@@ -64,21 +66,22 @@ def forwad_to_target_url(
   name="administration info",
   response_model=schemas.URLInfo,
 )
-def get_url_info(
-  secret_key: str, request: Request, db: Session = Depends(get_db)
+async def get_url_info(
+  secret_key: str, request: Request, session: Session = Depends(get_session)
 ):
-  if db_url := crud.get_db_url_by_secret_key(db, secret_key=secret_key):
-    return get_admin_info(db_url)
+  if db_url := await crud.get_db_url_by_secret_key(session=session, secret_key=secret_key):
+    result = await get_admin_info(db_url)
+    return result
   else:
     raise_not_found(request)
 
 
 @app.delete("/admin/{secret_key}")
-def delete_url(
+async def delete_url(
   secret_key: str,
-  request: Request, db: Session = Depends(get_db)
+  request: Request, session: Session = Depends(get_session)
 ):
-  if db_url := crud.deactivate_db_url_by_secret_key(db, secret_key=secret_key):
+  if db_url := await crud.deactivate_db_url_by_secret_key(session=session, secret_key=secret_key):
     message = f'Succesfully deleted shortened URL for "{db_url.target_url}"'
     return {"detail": message}
   else:

@@ -1,13 +1,11 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlmodel import SQLModel, Field
 
-from .database import Base
-
-class URL(Base):
+class URL(SQLModel, table=True):
   __tablename__ = "urls"
 
-  id = Column(Integer, primary_key=True)
-  key = Column(String, unique=True, index=True)
-  secret_key = Column(String, unique=True, index=True)
-  target_url = Column(String, index=True)
-  is_active = Column(Boolean, default=True)
-  clicks = Column(Integer, default=0)
+  id: int = Field(default=None, nullable=False, primary_key=True)
+  key: str = Field(unique=True, index=True)
+  secret_key: str = Field(unique=True, index=True)
+  target_url:str = Field(index=True)
+  is_active: bool = Field(default=True)
+  clicks: int = Field(default=0)
