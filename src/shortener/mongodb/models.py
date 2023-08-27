@@ -1,8 +1,15 @@
-from mongoengine import Document, StringField, IntField, BooleanField
+from beanie import Document
+from pydantic import Field
+
 
 class URL(Document):
-    key = StringField(required=True, unique=True, index=True)
-    secret_key = StringField(unique=True, index=True)
-    target_url = StringField(required = True)
-    is_active = BooleanField(default=True)
-    clicks = IntField(default = 0)
+
+    key: str = Field(unique=True, index=True)
+    secret_key: str = Field(unique=True, index=True)
+    target_url: str = Field(index=True)
+    is_active: bool = Field(default=True)
+    clicks: int = Field(default=0)
+
+    class Settings:
+        name = "urls"
+        use_state_management = True
