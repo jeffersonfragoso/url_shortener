@@ -3,3 +3,5 @@ __pycache__
 .venv
 *.pyc
 shortener.db
+/.docker/mongo/data/*
+!/.docker/mongo/data/.gitkeep

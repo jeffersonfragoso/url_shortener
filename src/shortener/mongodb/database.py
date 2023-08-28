@@ -7,6 +7,6 @@ from shortener.config import get_settings
 async def init_db():
   client = AsyncIOMotorClient(get_settings().db_url)
   await init_beanie(
-    database=client.db_name,
+    database=client.get_database(),
     document_models=[URL]
   )
