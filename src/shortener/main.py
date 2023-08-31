@@ -1,5 +1,11 @@
+import asyncio
+import json
+
+
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from bson import json_util
 from starlette.datastructures import URL
 
 from shortener.config import get_settings
@@ -10,14 +16,39 @@ from shortener.mongodb import models
 
 app = FastAPI()
 
+loop = asyncio.get_event_loop()
+producer = AIOKafkaProducer(
+  loop=loop,
+  bootstrap_servers="url_shortener-kafka-1:9092"
+)
+
+consumer_update_clicks = AIOKafkaConsumer(
+  "update-clicks",
+  bootstrap_servers="url_shortener-kafka-1:9092",
+  loop=loop
+)
+
+async def consume():
+  await consumer_update_clicks.start()
+  try:
+    async for msg in consumer_update_clicks:
+      url_key = json.loads(msg.value)
+      await mongodb.crud.update_db_clicks(url_key)
+  finally:
+    await consumer_update_clicks.stop()
+
 @app.on_event("startup")
 async def create_db_client():
-    try:
-        await mongodb.init_db()
-        print("Successfully connected to the Mongo database.")
-    except Exception as e:
-        print(e)
-        print("An error occurred while connecting to Mongo database.")
+  try:
+    await mongodb.init_db()
+    print("Successfully connected to the Mongo database.")
+
+    await producer.start()
+    loop.create_task(consume())
+
+  except Exception as e:
+    print(e)
+    print("An error occurred while startup.")
 
 
 async def get_admin_info(db_url: models.URL) -> schemas.URLInfo:
@@ -41,12 +72,12 @@ def read_root():
   return "Welcome to URL shortener API :)"
 
 
-def raise_not_found(request):
-  message = f"URL '{request.url}' doesn't exist"
+def raise_not_found(full_url):
+  message = f"URL '{full_url}' doesn't exist"
   raise HTTPException(status_code=404, detail=message)
 
 
-@app.post("/url", response_model=schemas.URLInfo)
+@app.post("/url")
 async def create_url(url: schemas.URLBase):
   db_url = await mongodb.crud.create_db_url(url=url)
   result = await get_admin_info(db_url)
@@ -59,10 +90,13 @@ async def forwad_to_target_url(
 ):
   db_url = await mongodb.crud.get_db_url_by_key(url_key=url_key)
   if db_url:
-    await mongodb.crud.update_db_clicks(db_url=db_url)
+    await producer.send(
+      topic="update-clicks",
+      value=json_util.dumps(db_url.key).encode("ascii")
+    )
     return RedirectResponse(db_url.target_url)
   else:
-    raise_not_found(request)
+    raise_not_found(str(request.url))
 
 
 @app.get(

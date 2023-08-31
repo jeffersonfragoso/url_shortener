@@ -35,7 +35,8 @@ async def get_db_url_by_secret_key(secret_key: str) -> models.URL:
   except Exception as e:
     return None
 
-async def update_db_clicks(db_url: models.URL) -> models.URL:
+async def update_db_clicks(url_key: str) -> models.URL:
+  db_url = await get_db_url_by_key(url_key=url_key)
   db_url.clicks += 1
   await db_url.save_changes()
   return db_url
